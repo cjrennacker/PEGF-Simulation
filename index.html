@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html{color-scheme:light}body{margin:0;font-size:14px}</style></head><body>
+<title>Course Container Simulation</title>
+<style>
+/* Layout: one calm column, a persistent status strip above each decision, quiet surfaces. Boldness lives in the debrief bars. */
+:root{
+  --bg:#F1F4F3; --surface:#FFFFFF; --ink:#16201F; --muted:#566664; --line:#D3DBD9;
+  --accent:#0E6B66; --accent-ink:#FFFFFF; --warn:#A8620B; --bad:#B03328; --good:#2B7A47; --tint:#E4EEEC;
+  --serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1615; --surface:#172120; --ink:#E6EEEC; --muted:#9AABA8; --line:#2B3937;
+  --accent:#4FC1B8; --accent-ink:#06201E; --warn:#E0A04A; --bad:#E57A6D; --good:#6CC58B; --tint:#1D2B29; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1615; --surface:#172120; --ink:#E6EEEC; --muted:#9AABA8; --line:#2B3937;
+  --accent:#4FC1B8; --accent-ink:#06201E; --warn:#E0A04A; --bad:#E57A6D; --good:#6CC58B; --tint:#1D2B29; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
+#app{max-width:780px;margin-inline:auto;padding-inline:16px;padding-block:20px 56px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:30px} h2{font-size:23px} h3{font-size:17px}
+p{margin:0}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stack{display:flex;flex-direction:column;gap:16px}
+.stack-s{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.choice{display:block;width:100%;text-align:left;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:14px 16px;cursor:pointer;font:inherit}
+.choice:hover{border-color:var(--accent)}
+.choice[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--tint)}
+.choice .t{font-weight:600;display:block;margin-bottom:2px}
+.choice .d{color:var(--muted);font-size:14px;display:block}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.status div{background:var(--surface);padding:10px 12px}
+.status .k{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;display:block}
+.status .v{font-weight:600}
+.v.ok{color:var(--good)} .v.mid{color:var(--warn)} .v.low{color:var(--bad)}
+.hrs{font-variant-numeric:tabular-nums;font-weight:600}
+.ctl{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line)}
+.ctl:first-child{border-top:0}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:18px;cursor:pointer}
+.stepper b{min-width:22px;text-align:center;font-variant-numeric:tabular-nums}
+.check{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+.check:first-of-type{border-top:0}
+.check input{margin-top:4px;width:18px;height:18px;accent-color:var(--accent);flex:none}
+.check .cost{margin-left:auto;white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums;padding-left:8px}
+.budget{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding-block:8px;z-index:2;border-bottom:1px solid var(--line)}
+.bar{height:10px;background:var(--tint);border-radius:5px;overflow:hidden;position:relative}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:5px}
+.bar.ref i{background:var(--muted);opacity:.55}
+.dim{display:grid;grid-template-columns:130px 1fr 78px;gap:10px;align-items:center;padding:6px 0}
+.dim .nm{font-weight:600;font-size:14px}
+.dim .nums{font-variant-numeric:tabular-nums;text-align:right;font-size:13px}
+.dim .bars{display:flex;flex-direction:column;gap:4px;min-width:0}
+@media(max-width:480px){.dim{grid-template-columns:1fr 70px}.dim .bars{grid-column:1/-1;order:3}}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.scroll{overflow-x:auto}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid var(--line)}
+.tag.S{color:var(--good);border-color:var(--good)} .tag.D{color:var(--accent);border-color:var(--accent)} .tag.E{color:var(--warn);border-color:var(--warn)}
+.note{border-left:3px solid var(--warn);padding:2px 0 2px 12px}
+.fail{border-left:3px solid var(--bad);padding:2px 0 2px 12px}
+ul.tight{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+details summary{cursor:pointer;font-weight:600}
+footer{font-size:12.5px;color:var(--muted)}
+</style>
+<div id="app"></div>
+<script>
+"use strict";
+/* ===================== DATA TABLES (tunable) =====================
+   Label key: S = sourced, D = derived, E = pedagogical estimate. See PARAMS at the bottom for citations. */
+const CFG = { BUILD_HOURS:48, SUPPORT_HOURS:45, WEEKLY_STUDENT_HOURS:9, ATTRITION_FAIL_BELOW:80,
+  FRICTION_BASE:60, TEMPLATE_DISCOUNT:0.5, FAMILIARITY:0.35, CHECKPOINT_WEEKS:[3,7,12],
+  SUSTAIN_DENOM:25, PATCH_REACH:0.78 };
+
+const ARCH = {
+  skills:{ name:"Large skills course", n:65, drain:6, best:"weekly",
+    blurb:"65 students. Lectures plus a lab after each one. Everyone moves in sequence, so a confused student is one of sixty-five." },
+  studio:{ name:"Studio or capstone", n:24, drain:4, best:"studio",
+    blurb:"24 students in teams. Milestones, critiques, and client-style check-ins matter more than weekly content." },
+  seminar:{ name:"Reading seminar", n:18, drain:3, best:"seminar",
+    blurb:"18 students. Heavy reading, discussion, and synthesis writing. The risk is a course that is only reading." },
+  methods:{ name:"Methods and lab course", n:40, drain:5, best:"unit",
+    blurb:"40 students. Skills build in units of two to three weeks, and later work depends on earlier work." }
+};
+
+const TPL = {
+  weekly:{ name:"Weekly Rhythm", approved:true, desc:"Same weekly pattern every module: overview, learn, practice, apply, check. Modeled on a fixed cadence of modules, lectures, labs, and a project and quiz." },
+  studio:{ name:"Project Studio", approved:true, desc:"Modules follow project phases. Milestones, critiques, and reflections sit in the same place each time." },
+  seminar:{ name:"Seminar Reading", approved:true, desc:"Each week opens with a driving question, then readings, discussion, and a short synthesis." },
+  unit:{ name:"Unit Sequence", approved:true, desc:"Units of two to three weeks with a shared opener and closer. Fits skills that stack." },
+  custom:{ name:"Build from a blank course", approved:false, desc:"Your own layout from scratch. Every core element is yours to build and yours to explain." }
+};
+const FIT = { // how well each approved template suits each course type. E.
+  weekly:{skills:1, studio:.4, seminar:.7, methods:.7},
+  studio:{skills:.4, studio:1, seminar:.7, methods:.4},
+  seminar:{skills:.4, studio:.7, seminar:1, methods:.7},
+  unit:{skills:.7, studio:.7, seminar:.4, methods:1}
+};
+
+const MODES = { // build hours per weekly student hour. E.
+  lecture:{name:"Recorded instructor lectures", cost:4},
+  reading:{name:"Readings", cost:1},
+  practice:{name:"Practice and application", cost:2.5},
+  collab:{name:"Collaboration and discussion", cost:3}
+};
+
+const HYG = [ // core container elements. cost in build hours (halved under an approved template). friction removed. S for the practice, E for the numbers.
+  {id:"start", name:"Start Here module with a short course tour", cost:6, fr:10, d:"Where students go first, and where they return all term."},
+  {id:"dates", name:"Due dates on every graded item", cost:3, fr:6, d:"So the Calendar and To-Do list tell the truth."},
+  {id:"rubrics", name:"A rubric attached to every assignment", cost:5, fr:5, d:"Students check rubrics when they want to know how they did."},
+  {id:"feedback", name:"A plain statement of where feedback appears", cost:1, fr:6, d:"Comments, annotations, rubric. Say it early and again after the first graded return."},
+  {id:"selfc", name:"Every module self-contained", cost:8, fr:8, d:"Instructions, readings, and rubrics sit inside the module, in the order students do them."}
+];
+
+const FREE = [ // the free zone. This is where the course sounds like you.
+  {id:"welcome", name:"A welcome video in your own voice", cost:2},
+  {id:"signature", name:"A signature assignment only you would design", cost:4},
+  {id:"narrative", name:"Module titles and a storyline that frame the term", cost:2},
+  {id:"examples", name:"Your own curated examples and readings", cost:3},
+  {id:"prompts", name:"Discussion and critique prompts in your own tone", cost:2}
+];
+
+const DEV = [ // deviations from the shared container. just = course types where the deviation has a real teaching reason. E.
+  {id:"reorder", name:"Reorder items inside each module", cost:3, fr:8, coh:8, voice:10, just:["studio","methods"],
+    d:"For example, practice before the lecture. Students see a different pattern than in other courses."},
+  {id:"rename", name:"Rename the standard pages and sections", cost:1, fr:7, coh:8, voice:10, just:[],
+    d:"Make the labels sound like you. Students look for the usual words."},
+  {id:"flat", name:"Replace modules with one long course page", cost:2, fr:14, coh:12, voice:10, just:[],
+    d:"Everything in one scroll. No module pathway."},
+  {id:"extra", name:"Add a section the template does not have", cost:3, fr:6, coh:6, voice:10, just:["studio","seminar"],
+    d:"A critique gallery, field notes, a reading log."},
+  {id:"lock", name:"Lock modules until the previous one is finished", cost:1, fr:7, coh:6, voice:6, just:["skills","methods"],
+    d:"Useful when later work depends on earlier skills. Students cannot work ahead."},
+  {id:"external", name:"Deliver feedback outside Canvas", cost:4, fr:10, coh:8, voice:8, just:["skills","studio"],
+    d:"Forms and spreadsheets generate fast individual feedback. Students must look somewhere new for it."}
+];
+const SIGNPOST = { cost_per_deviation:1, friction_multiplier:.4, justified_multiplier:.5 };
+
+/* ---- scoring dimensions (equal weight) ---- */
+const DIMS = [
+  {id:"find", name:"Student findability", d:"How quickly a new student finds the five things they need."},
+  {id:"coh", name:"Program coherence", d:"How much a student who has taken other courses must relearn."},
+  {id:"breadth", name:"Learning breadth", d:"Whether students get more than one way to learn."},
+  {id:"voice", name:"Your voice", d:"How much the course still sounds like you."},
+  {id:"sustain", name:"Sustainability", d:"Whether you could teach it again without burning out."}
+];
+
+/* ===================== ENGINE ===================== */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const clamp=(x,lo=0,hi=100)=>Math.max(lo,Math.min(hi,x));
+const r1=x=>Math.round(x*10)/10;
+
+function breadthOf(mix){
+  const used=Object.keys(MODES).filter(m=>mix[m]>=1).length;
+  let b=25*used;
+  const mx=Math.max(...Object.values(mix));
+  if(mx/CFG.WEEKLY_STUDENT_HOURS>0.55) b-=20;
+  if(mix.lecture<1) b-=10;
+  return clamp(b);
+}
+function buildCost(c){
+  const T=TPL[c.tpl]; const mult=T.approved?CFG.TEMPLATE_DISCOUNT:1; let b=0;
+  for(const m in MODES) b+=c.mix[m]*MODES[m].cost;
+  for(const h of HYG) if(c.hyg[h.id]) b+=h.cost*mult;
+  for(const z of FREE) if(c.free[z.id]) b+=z.cost;
+  let nd=0; for(const d of DEV) if(c.dev[d.id]){b+=d.cost;nd++}
+  if(c.sign) b+=nd*SIGNPOST.cost_per_deviation;
+  return b;
+}
+function init(c){
+  const T=TPL[c.tpl], fit=T.approved?FIT[c.tpl][c.arch]:1;
+  let f=CFG.FRICTION_BASE, coh=T.approved?40:0, voice=30;
+  const flags={};
+  for(const h of HYG) if(c.hyg[h.id]){f-=h.fr;coh+=12;flags[h.id]=true}
+  for(const z of FREE) if(c.free[z.id]) voice+=12;
+  for(const d of DEV) if(c.dev[d.id]){
+    const just=d.just.includes(c.arch);
+    const sc=(just?SIGNPOST.justified_multiplier:1)*(c.sign?SIGNPOST.friction_multiplier:1);
+    f+=d.fr*sc; coh-=d.coh*(just?SIGNPOST.justified_multiplier:1); voice+=d.voice;
+  }
+  f+=(1-fit)*20; if(T.approved) f-=CFG.FAMILIARITY*20;
+  voice-=(1-fit)*25; if(!T.approved) voice+=10;
+  return { c, arch:c.arch, approved:T.approved, fit,
+    f:clamp(f), temp:0, coh:clamp(coh), voice:clamp(voice), breadth:breadthOf(c.mix),
+    buildLeft:CFG.BUILD_HOURS-buildCost(c), support:CFG.SUPPORT_HOURS, ret:100, flags, log:[], patches:0, ended:null, endedWeek:null };
+}
+const eF=S=>clamp(S.f+S.temp);
+
+function drift(S,idx){
+  const A=ARCH[c_arch(S)];
+  S.temp*=0.5;
+  S.support-=A.drain+0.1*eF(S);
+  S.ret-=1.5+0.06*eF(S);
+  S.f=clamp(S.f+(S.flags.selfc?0.5:2));
+  return check(S,idx);
+}
+const c_arch=S=>S.arch;
+function check(S,idx){
+  if(S.ended) return S.ended;
+  const w=CFG.CHECKPOINT_WEEKS[idx];
+  if(S.support<0){S.ended="burnout";S.endedWeek=w}
+  else if(S.ret<CFG.ATTRITION_FAIL_BELOW){S.ended="attrition";S.endedWeek=w}
+  return S.ended;
+}
+
+/* ---- events: weights are hidden from the player. All numbers E unless noted. ---- */
+const EVENTS = [
+ { id:"syllabus", title:"“Where do I find the syllabus?”",
+   text:"Three students email in the first week. Two more ask in the class chat.",
+   w:S=>1+eF(S)/20+(S.flags.start?0:1.5),
+   opts:S=>[
+    {id:"patch",ref:!!S.flags.start,label:"Post an announcement with the link",hint:"Quick and cheap. Reaches most students. Fades.",fx:{support:-1,temp:-4.7},after:"The announcement reached most students, then faded as new questions replaced it."},
+    {id:"fix",ref:!S.flags.start,label:"Pin a Start Here module and trim the left menu",hint:"Real time now. Lasts all term.",fx:{support:-(S.approved?3:6),f:-(S.flags.start?3:12),flag:"start"},after:"Students now have one place to start, and the questions stopped."},
+    {id:"absorb",label:"Answer each email as it comes",hint:"No setup. Costs time and some patience.",fx:{support:-0.1*ARCH[S.arch].n,ret:-1.5},after:"You answered every email. It cost hours, and a few students gave up waiting."}]},
+ { id:"dates", title:"“The Calendar is blank. What is due this week?”",
+   text:"Students who plan by To-Do list and Calendar cannot see your deadlines.",
+   w:S=>S.flags.dates?0.3:3,
+   opts:S=>[
+    {id:"patch",ref:!!S.flags.dates,label:"Post a list of due dates in an announcement",hint:"Quick. Some students will not read it.",fx:{support:-1,temp:-4},after:"The list helped the students who read announcements. The Calendar stayed empty."},
+    {id:"fix",ref:!S.flags.dates,label:"Enter a due date on every graded item",hint:"An afternoon of clicking. Fixed for good.",fx:{support:-(S.approved?1.5:3),f:-(S.flags.dates?0:8),flag:"dates"},after:"The Calendar and To-Do list now match your course."},
+    {id:"absorb",label:"Tell students to check the syllabus",hint:"Free for you. Costs them.",fx:{support:-4,ret:-2},after:"Students kept asking. Some missed work."}]},
+ { id:"cross", title:"“In my other course it is laid out completely differently.”",
+   text:"A student who is taking four courses says they keep losing time to layout.",
+   w:S=>0.5+(100-S.coh)/25,
+   opts:S=>[
+    {id:"patch",ref:S.coh>=85,label:"Reply with directions for this course",hint:"Kind and quick. One student at a time.",fx:{support:-2,ret:-1},after:"That student found their way. The next one will ask again."},
+    {id:"fix",ref:S.coh<85,label:"Align names and placement with the program pattern",hint:"Costs time and a little of your style. Helps everyone.",fx:{support:-4,coh:12,voice:-3,f:-5},after:"Your course now follows a pattern students already know."},
+    {id:"defend",label:"Explain why your layout serves the course better",hint:"Cheap. Works only if the reasons are good.",fx:{support:-1,ret:-2,voice:2},after:"You made your case. The student was not persuaded, and others heard about it."}]},
+ { id:"workload", title:"“This feels like more than nine hours a week.”",
+   text:"The complaint is about workload. It might be about something else.",
+   w:S=>0.5+eF(S)/25,
+   opts:S=>[
+    {id:"hold",ref:eF(S)<35,label:"Hold firm and show how the workload matches the credit hours",hint:"Free. Depends on how clean the course feels.",fx:eF(S)<35?{support:-1,ret:-0.5}:{support:-3,ret:-4},after:eF(S)<35?"Students accepted it. The course was easy enough to navigate that the hours felt earned.":"Students did not believe you. Time spent hunting for things reads as workload."},
+    {id:"trim",label:"Trim an assignment",hint:"Immediate relief. Costs some of the course.",fx:{support:-2,breadth:-8,ret:-1,voice:-4},after:"The complaints stopped. The course lost something you wanted in it."},
+    {id:"fix",ref:eF(S)>=35,label:"Remove duplicate pages and redundant links",hint:"Tedious. Removes noise that feels like work.",fx:{support:-3,f:-8},after:"Students stopped spending effort on the container, and the workload complaints eased."}]},
+ { id:"feedback", title:"“I never got comments on my grade.”",
+   text:"The comments were there. The student did not know where to look.",
+   w:S=>(S.flags.feedback?0.4:3)+(S.flags.rubrics?0:1),
+   opts:S=>[
+    {id:"patch",ref:!!S.flags.feedback,label:"Announce where comments appear",hint:"Quick. Reaches most students.",fx:{support:-1,temp:-4},after:"Most students saw it. A few did not."},
+    {id:"fix",ref:!S.flags.feedback,label:"State where feedback appears and attach rubrics",hint:"An hour or two. Lasts.",fx:{support:-2,f:-(S.flags.feedback?2:6),flag:"feedback"},after:"Students now know where to look, and they look."},
+    {id:"absorb",label:"Resend the feedback by email",hint:"No setup. More email next time.",fx:{support:-3,ret:-2},after:"The student got the comments. You will do this again."}]},
+ { id:"sub", title:"You are out for a week. A colleague steps in.",
+   text:"You are sick for a week. A colleague has to run your course.",
+   w:S=>1+(100-S.coh)/50,
+   opts:S=>{const cover=1+(100-S.coh)/12;return [
+    {id:"guide",ref:true,label:"Hand off with a one-page guide",hint:"An hour of writing. How much it helps depends on how standard the course is.",fx:{support:-(1+cover*0.4),ret:-(100-S.coh)/50},after:"Your colleague could find things and keep the week on track."},
+    {id:"bare",label:"Hand off with a login and good wishes",hint:"No prep. Your colleague learns the layout as they go.",fx:{support:-cover*0.5,ret:-(100-S.coh)/15},after:"Your colleague spent the week decoding the course. Students felt it."},
+    {id:"push",label:"Teach through it from home",hint:"Students notice nothing. You pay.",fx:{support:-cover*1.5},after:"Students saw no gap. You did not recover the hours."}]}}
+];
+
+function draw(S,rng,k){
+  const pool=EVENTS.map(e=>({e,w:e.w(S)})); const out=[];
+  while(out.length<k&&pool.length){
+    const tot=pool.reduce((a,b)=>a+b.w,0); let x=rng()*tot, i=0;
+    for(;i<pool.length;i++){x-=pool[i].w; if(x<=0)break}
+    i=Math.min(i,pool.length-1); out.push(pool[i].e); pool.splice(i,1);
+  }
+  return out;
+}
+function applyOpt(S,ev,opt,idx){
+  const fx=opt.fx;
+  if(fx.support) S.support+=fx.support;
+  if(fx.ret) S.ret+=fx.ret;
+  if(fx.temp) S.temp+=fx.temp;
+  if(fx.f) S.f=clamp(S.f+fx.f);
+  if(fx.coh) S.coh=clamp(S.coh+fx.coh);
+  if(fx.voice) S.voice=clamp(S.voice+fx.voice);
+  if(fx.breadth) S.breadth=clamp(S.breadth+fx.breadth);
+  if(fx.flag) S.flags[fx.flag]=true;
+  if(opt.id==="patch") S.patches++;
+  S.log.push({week:CFG.CHECKPOINT_WEEKS[idx],ev:ev.title,evId:ev.id,opt:opt.label,optId:opt.id,after:opt.after});
+  return check(S,idx);
+}
+function scores(S){
+  const sust=clamp(100*(Math.max(0,S.support)+0.5*Math.max(0,S.buildLeft))/CFG.SUSTAIN_DENOM);
+  return {find:clamp(100-S.f),coh:S.coh,breadth:S.breadth,voice:S.voice,sustain:sust};
+}
+function fiveItems(S){
+  const F=eF(S), base=i=>8+0.55*F*i, W=[1,1.1,1.3,1.2,.8];
+  return [["The syllabus",base(W[0])*(S.flags.start?1:1.3)],["The next assignment and its due date",base(W[1])*(S.flags.dates?1:1.5)],
+          ["The rubric for that assignment",base(W[2])*(S.flags.rubrics?1:1.5)],["Where your feedback and grade are",base(W[3])*(S.flags.feedback?1:1.6)],
+          ["How to contact the instructor",base(W[4])]].map(([n,s])=>[n,Math.round(s)]);
+}
+
+/* ---- reference path: a strong, scripted run from the same starting conditions ---- */
+const REF = {
+  skills:{mix:{lecture:3,reading:2,practice:3,collab:1},dev:["lock"],free:["welcome","narrative","prompts"]},
+  studio:{mix:{lecture:1,reading:2,practice:4,collab:2},dev:["extra"],free:["welcome","narrative","prompts"]},
+  seminar:{mix:{lecture:1,reading:4,practice:2,collab:2},dev:["extra"],free:["welcome","narrative","prompts"]},
+  methods:{mix:{lecture:2,reading:2,practice:4,collab:1},dev:["reorder"],free:["welcome","narrative","prompts"]}
+};
+function refChoices(arch){
+  const R=REF[arch], c={arch,tpl:ARCH[arch].best,mix:{...R.mix},hyg:{},free:{},dev:{},sign:true};
+  HYG.forEach(h=>c.hyg[h.id]=true); R.free.forEach(f=>c.free[f]=true); R.dev.forEach(d=>c.dev[d]=true);
+  return c;
+}
+function simulate(c,seed,picker){
+  const S=init(c), rng=mulberry32(seed);
+  for(let i=0;i<CFG.CHECKPOINT_WEEKS.length&&!S.ended;i++){
+    if(drift(S,i)) break;
+    for(const ev of draw(S,rng,2)){
+      const opts=ev.opts(S); const pick=picker(ev,opts,S);
+      if(applyOpt(S,ev,pick,i)) break;
+    }
+  }
+  return S;
+}
+const refPicker=(ev,opts)=>opts.find(o=>o.ref)||opts[0];
+function refRun(arch,seed){return simulate(refChoices(arch),seed,refPicker)}
+
+/* ===================== UI ===================== */
+const $app=document.getElementById("app");
+let R=null;
+function fresh(){return {screen:"intro",arch:null,tpl:null,mix:{lecture:3,reading:3,practice:2,collab:1},hyg:{},free:{},dev:{},sign:false,
+  seed:Math.floor(Math.random()*1e9),S:null,ck:0,queue:[],qi:0,rng:null,note:""}}
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+function bandF(F){return F<25?["Settled","ok"]:F<45?["Some hunting","mid"]:F<65?["Often lost","low"]:["Lost","low"]}
+function bandR(r){return r>=95?["Steady","ok"]:r>=90?["A few gone","ok"]:r>=85?["Slipping","mid"]:["Bleeding","low"]}
+function bandT(s){const x=s/CFG.SUPPORT_HOURS;return x>0.5?["Comfortable","ok"]:x>0.25?["Tight","mid"]:x>=0?["Running on fumes","low"]:["Gone","low"]}
+function statusHTML(S){
+  const f=bandF(eF(S)),r=bandR(S.ret),t=bandT(S.support);
+  return `<div class="status" role="group" aria-label="Live status">
+   <div><span class="k">Students finding things</span><span class="v ${f[1]}">${f[0]}</span></div>
+   <div><span class="k">Roster</span><span class="v ${r[1]}">${r[0]}</span></div>
+   <div><span class="k">Your time this term</span><span class="v ${t[1]}">${t[0]}</span></div>
+   <div><span class="k">Build hours in reserve</span><span class="v hrs">${r1(Math.max(0,S.buildLeft))}</span></div></div>`;
+}
+function go(s){R.screen=s;render();window.scrollTo(0,0)}
+function cur(){return {arch:R.arch,tpl:R.tpl,mix:R.mix,hyg:R.hyg,free:R.free,dev:R.dev,sign:R.sign}}
+const mixTotal=()=>Object.values(R.mix).reduce((a,b)=>a+b,0);
+function left(){return CFG.BUILD_HOURS-buildCost(cur())}
+
+function render(){
+  const fn=SCREENS[R.screen]; $app.innerHTML=fn(); wire();
+}
+const SCREENS={
+ intro:()=>`<div class="stack">
+  <div class="eyebrow">Learning simulation · 15 to 20 minutes</div>
+  <h1>The Container and the Content</h1>
+  <p>You are the instructor of record for a three-credit course at ASU. In four weeks it opens in Canvas. You will build it, run a term, and find out what your choices did to your students and to you.</p>
+  <div class="panel stack-s">
+   <p><b>What is fixed:</b> the container, meaning where things live and how a student finds them.</p>
+   <p><b>What is yours:</b> everything inside it. Your lectures, readings, assignments, and voice.</p>
+   <p>Nothing here tells you which choices are right. Some you will feel immediately. Others will only show up in the debrief.</p>
+  </div>
+  <p class="muted">Time is the constraint. You have a fixed number of build hours before launch and a fixed number of hours to run the term. Hours spent on one thing are not available for another.</p>
+  <div><button class="btn" data-act="start">Begin</button></div></div>`,
+ arch:()=>`<div class="stack"><div class="eyebrow">Your course</div><h2>Which course are you building?</h2>
+  <div class="grid2">${Object.entries(ARCH).map(([k,a])=>`<button class="choice" aria-pressed="${R.arch===k}" data-act="arch" data-k="${k}"><span class="t">${a.name}</span><span class="d">${a.blurb}</span></button>`).join("")}</div>
+  <div><button class="btn" data-act="to" data-k="tpl" ${R.arch?"":"disabled"}>Next</button></div></div>`,
+ tpl:()=>`<div class="stack"><div class="eyebrow">Container · choose a starting point</div><h2>Which template do you start from?</h2>
+  <p class="muted">The program offers four templates built on one shared skeleton. They differ only in how the weeks are grouped. They set the container only, and your content goes inside. You can also build from a blank course.</p>
+  <div class="stack-s">${Object.entries(TPL).map(([k,t])=>`<button class="choice" aria-pressed="${R.tpl===k}" data-act="tpl" data-k="${k}"><span class="t">${t.name}</span><span class="d">${t.desc}</span></button>`).join("")}</div>
+  <div class="row"><button class="btn ghost" data-act="to" data-k="arch">Back</button><button class="btn" data-act="to" data-k="mix" ${R.tpl?"":"disabled"}>Next</button></div></div>`,
+ mix:()=>{const tot=mixTotal(),L=left();return `<div class="stack"><div class="eyebrow">Learning mix</div><h2>How do students spend their ${CFG.WEEKLY_STUDENT_HOURS} hours a week?</h2>
+  <p class="muted">Three credit hours across a 15-week term is about ${CFG.WEEKLY_STUDENT_HOURS} hours a week per student. Each mode costs a different number of build hours to produce.</p>
+  <div class="panel">${Object.entries(MODES).map(([k,m])=>`<div class="ctl"><div><b>${m.name}</b><div class="muted">${m.cost} build hours per weekly hour</div></div>
+   <div class="stepper"><button data-act="mix" data-k="${k}" data-d="-1" aria-label="Fewer hours of ${m.name}">−</button><b>${R.mix[k]}</b><button data-act="mix" data-k="${k}" data-d="1" aria-label="More hours of ${m.name}">+</button></div></div>`).join("")}</div>
+  <p class="hrs">${tot} of ${CFG.WEEKLY_STUDENT_HOURS} student hours placed · ${r1(L)} build hours left (before the next step)</p>
+  <div class="row"><button class="btn ghost" data-act="to" data-k="tpl">Back</button><button class="btn" data-act="to" data-k="extras" ${tot===CFG.WEEKLY_STUDENT_HOURS?"":"disabled"}>Next</button></div></div>`},
+ extras:()=>{const L=left(),T=TPL[R.tpl],mult=T.approved?CFG.TEMPLATE_DISCOUNT:1;
+  const nd=DEV.filter(d=>R.dev[d.id]).length;
+  return `<div class="stack"><div class="budget"><b class="hrs">${r1(L)}</b> build hours left ${L<0?'<span class="tag E">over budget</span>':''}</div>
+  <div class="eyebrow">Fill the container</div><h2>Spend your remaining build hours</h2>
+  <div class="panel"><h3>Core elements of the container</h3><p class="muted">${T.approved?"Your template arrives with these half built, so they cost less.":"You are building these from nothing, so they cost full price."}</p>
+   ${HYG.map(h=>`<label class="check"><input type="checkbox" data-act="hyg" data-k="${h.id}" ${R.hyg[h.id]?"checked":""}><span><b>${h.name}</b><br><span class="muted">${h.d}</span></span><span class="cost">${r1(h.cost*mult)} h</span></label>`).join("")}</div>
+  <div class="panel"><h3>Your free zone</h3><p class="muted">These sit inside the container and do not change where anything lives.</p>
+   ${FREE.map(h=>`<label class="check"><input type="checkbox" data-act="free" data-k="${h.id}" ${R.free[h.id]?"checked":""}><span><b>${h.name}</b></span><span class="cost">${h.cost} h</span></label>`).join("")}</div>
+  <div class="panel"><h3>Deviations from the shared container</h3><p class="muted">You can change the container. Each change is a trade. The simulation will not tell you which are worth it.</p>
+   ${DEV.map(h=>`<label class="check"><input type="checkbox" data-act="dev" data-k="${h.id}" ${R.dev[h.id]?"checked":""}><span><b>${h.name}</b><br><span class="muted">${h.d}</span></span><span class="cost">${h.cost} h</span></label>`).join("")}
+   <label class="check"><input type="checkbox" data-act="sign" ${R.sign?"checked":""}><span><b>Signpost every deviation in the Start Here module</b><br><span class="muted">Tell students what is different and why.</span></span><span class="cost">${nd} h</span></label></div>
+  <div class="row"><button class="btn ghost" data-act="to" data-k="mix">Back</button><button class="btn" data-act="launch" ${L<0?"disabled":""}>Launch the course</button></div></div>`},
+ event:()=>{const S=R.S,ev=R.queue[R.qi],w=CFG.CHECKPOINT_WEEKS[R.ck],opts=ev.opts(S);
+  return `<div class="stack">${statusHTML(S)}
+  <div class="eyebrow">Week ${w} · event ${R.qi+1} of ${R.queue.length}</div>
+  ${R.note?`<p class="note muted">${esc(R.note)}</p>`:""}
+  <h2>${ev.title}</h2><p>${ev.text}</p>
+  <div class="stack-s">${opts.map((o,i)=>`<button class="choice" data-act="opt" data-i="${i}"><span class="t">${esc(o.label)}</span><span class="d">${esc(o.hint)}</span></button>`).join("")}</div></div>`},
+ launch:()=>{const S=R.S;return `<div class="stack">${statusHTML(S)}
+  <div class="eyebrow">Launch</div><h2>The course is live.</h2>
+  <p>Students are in. You will check in at weeks ${CFG.CHECKPOINT_WEEKS.join(", ")}. At each check, a few things will have gone wrong. You will decide what to do about them.</p>
+  <p class="muted">You will see how things feel, not what they score. Scores come at the end.</p>
+  <div><button class="btn" data-act="checkpoint">Run the term</button></div></div>`},
+ ended:()=>{const S=R.S;const msg=S.ended==="burnout"?`<h2>Week ${S.endedWeek}: you ran out of time.</h2><p>You could not keep up. The term does not end gracefully. A colleague takes over and the section limps to the finish.</p>`:`<h2>Week ${S.endedWeek}: the roster collapsed.</h2><p>Too many students left. The program flags the section, and you are asked what happened.</p>`;
+  return `<div class="stack"><div class="fail stack-s">${msg}</div><p class="muted">Losing in week ${S.endedWeek} is a result. The debrief shows why it happened, and what a stronger path looked like from your starting conditions.</p><div><button class="btn" data-act="debrief">See the debrief</button></div></div>`},
+ done:()=>`<div class="stack"><h2>The term is over.</h2><p>Grades are in. You are not sure yet what you built. The debrief shows what your choices did.</p><div><button class="btn" data-act="debrief">See the debrief</button></div></div>`,
+ debrief:()=>debriefHTML()
+};
+
+function wire(){
+  $app.querySelectorAll("[data-act]").forEach(el=>{
+    const act=el.dataset.act, ev=(act==="hyg"||act==="free"||act==="dev"||act==="sign")?"change":"click";
+    el.addEventListener(ev,()=>handle(act,el));
+  });
+}
+function handle(a,el){
+  const k=el.dataset.k;
+  if(a==="start") go("arch");
+  else if(a==="arch"){R.arch=k;render()}
+  else if(a==="tpl"){R.tpl=k;render()}
+  else if(a==="to") go(k);
+  else if(a==="mix"){const d=+el.dataset.d,n=R.mix[k]+d;if(n>=0&&mixTotal()+d<=CFG.WEEKLY_STUDENT_HOURS){R.mix[k]=n}render()}
+  else if(a==="hyg"){R.hyg[k]=el.checked;render()}
+  else if(a==="free"){R.free[k]=el.checked;render()}
+  else if(a==="dev"){R.dev[k]=el.checked;render()}
+  else if(a==="sign"){R.sign=el.checked;render()}
+  else if(a==="launch"){R.S=init(cur());R.rng=mulberry32(R.seed);R.ck=0;go("launch")}
+  else if(a==="checkpoint") startCheckpoint();
+  else if(a==="opt") choose(+el.dataset.i);
+  else if(a==="debrief") go("debrief");
+  else if(a==="again"){R=fresh();go("intro")}
+}
+function startCheckpoint(){
+  const S=R.S;
+  if(drift(S,R.ck)){return go("ended")}
+  R.queue=draw(S,R.rng,2);R.qi=0;R.note="";go("event");
+}
+function choose(i){
+  const S=R.S,ev=R.queue[R.qi],opt=ev.opts(S)[i];
+  const res=applyOpt(S,ev,opt,R.ck);
+  R.note=opt.after;
+  if(res) return go("ended");
+  R.qi++;
+  if(R.qi<R.queue.length) return go("event");
+  R.ck++;
+  if(R.ck<CFG.CHECKPOINT_WEEKS.length){R.note="";return startCheckpoint()}
+  go("done");
+}
+
+/* ---- debrief ---- */
+function debriefHTML(){
+  const S=R.S, ref=refRun(R.arch,R.seed), sc=scores(S), rs=scores(ref);
+  const mean=o=>Math.round(DIMS.reduce((a,d)=>a+o[d.id],0)/DIMS.length);
+  const A=ARCH[R.arch],T=TPL[R.tpl];
+  const headline=S.ended==="burnout"?`You ran out of time in week ${S.endedWeek}.`:S.ended==="attrition"?`The roster collapsed in week ${S.endedWeek}.`:`You finished the term.`;
+  const lowest=DIMS.reduce((a,d)=>sc[d.id]<sc[a.id]?d:a,DIMS[0]);
+  const bars=DIMS.map(d=>`<div class="dim"><div class="nm">${d.name}<div class="muted" style="font-weight:400;font-size:12.5px">${d.d}</div></div>
+    <div class="bars"><div class="bar" aria-label="You ${Math.round(sc[d.id])}"><i style="width:${sc[d.id]}%"></i></div><div class="bar ref" aria-label="Reference ${Math.round(rs[d.id])}"><i style="width:${rs[d.id]}%"></i></div></div>
+    <div class="nums"><b>${Math.round(sc[d.id])}</b><br><span class="muted">${Math.round(rs[d.id])} ref</span></div></div>`).join("");
+  const fi=fiveItems(S), fr=fiveItems(ref);
+  const secs=a=>a.reduce((x,y)=>x+y[1],0);
+  const rows=fi.map((r,i)=>`<tr><td>${r[0]}</td><td>${r[1]} s</td><td class="muted">${fr[i][1]} s</td></tr>`).join("");
+  const fit=S.approved?FIT[R.tpl][R.arch]:1;
+  const chain=[];
+  if(!S.approved) chain.push("You built from a blank course. Every student started with no familiarity with your layout, and every core element cost you full price. Those hours were not available for your voice or for the term.");
+  if(S.approved&&fit<1) chain.push(`${T.name} fits a ${A.name.toLowerCase()} less well than ${TPL[A.best].name}. That mismatch raised student friction and cost you some of your voice.`);
+  const unj=DEV.filter(d=>R.dev[d.id]&&!d.just.includes(R.arch)), jus=DEV.filter(d=>R.dev[d.id]&&d.just.includes(R.arch));
+  if(unj.length) chain.push(`Deviations without a teaching reason in this course: ${unj.map(d=>d.name.toLowerCase()).join("; ")}. They bought a feeling of ownership and cost students time.`);
+  if(jus.length) chain.push(`Deviations with a real teaching reason here: ${jus.map(d=>d.name.toLowerCase()).join("; ")}. ${R.sign?"You signposted them, which removed most of the cost.":"Without a signpost, students had to discover them on their own."}`);
+  const freeN=FREE.filter(f=>R.free[f.id]).length;
+  if(freeN>=3&&unj.length===0) chain.push(`Your voice came from the free zone (${freeN} moves) and not from changing the container. Nothing in the free zone moved where students find things.`);
+  if(S.patches>=2) chain.push(`You patched ${S.patches} times. A patch fades by half at every check-in. The friction behind it was still there.`);
+  if(S.ended==="burnout") chain.push("The loop closed on you. Friction produced email, email used your hours, and with your hours gone there was no capacity left to fix the container.");
+  if(S.ended==="attrition") chain.push("Friction made the course feel harder than its hours. Students who could not find things left. Earlier choices set the odds for later events.");
+  const logRows=S.log.map(l=>`<li><b>Week ${l.week}.</b> ${l.ev} You chose “${esc(l.opt)}.” ${l.after}</li>`).join("");
+  const cmp=(label,mine,theirs)=>`<tr><td>${label}</td><td>${mine}</td><td class="muted">${theirs}</td></tr>`;
+  const rc=refChoices(R.arch);
+  const mixStr=m=>Object.keys(MODES).map(k=>`${m[k]}`).join(" / ");
+  const nHyg=o=>Object.values(o).filter(Boolean).length;
+  return `<div class="stack">
+   <div class="eyebrow">Debrief</div><h1>${headline}</h1>
+   <p>Your average across five dimensions was <b>${mean(sc)}</b>. The reference path scored <b>${mean(rs)}</b> from the same starting course (${A.name.toLowerCase()}) and the same random seed. Your weakest dimension was <b>${lowest.name.toLowerCase()}</b>.</p>
+   <div class="panel"><h3>Scorecard</h3><p class="muted">Dark bar is you. Light bar is the reference path.</p>${bars}
+    <p class="muted">Students who did not leave: <b>${Math.round(S.ret)}%</b> you · <b>${Math.round(ref.ret)}%</b> reference. Time left over: ${Math.max(0,r1(S.support))} h you · ${Math.max(0,r1(ref.support))} h reference.</p></div>
+   <div class="panel stack-s"><h3>A new student looks for five things</h3>
+    <p class="muted">Simulated time for a student who has never seen your course. These figures are the simulation’s estimates and were not measured. No published time-to-find data for Canvas course layouts was found.</p>
+    <div class="scroll"><table><thead><tr><th>Task</th><th>Your course</th><th>Reference</th></tr></thead><tbody>${rows}
+    <tr><td><b>Total</b></td><td><b>${secs(fi)} s</b></td><td class="muted"><b>${secs(fr)} s</b></td></tr></tbody></table></div>
+    <p class="muted">Now picture a student taking four other courses, each laid out differently. They pay this cost again each time.</p></div>
+   <div class="panel stack-s"><h3>Why it went the way it did</h3>
+    <ul class="tight">${chain.map(c=>`<li>${c}</li>`).join("")||"<li>Your choices were close to the reference path.</li>"}</ul>
+    ${S.log.length?`<h3 style="margin-top:8px">What happened at each check-in</h3><ul class="tight">${logRows}</ul>`:""}</div>
+   <div class="panel stack-s"><h3>Your path and the reference path</h3><div class="scroll"><table><thead><tr><th></th><th>You</th><th>Reference</th></tr></thead><tbody>
+    ${cmp("Template",T.name,TPL[rc.tpl].name)}
+    ${cmp("Weekly hours: lecture / reading / practice / collaboration",mixStr(R.mix),mixStr(rc.mix))}
+    ${cmp("Core elements built (of 5)",nHyg(R.hyg),5)}
+    ${cmp("Free-zone moves (of 5)",freeN,3)}
+    ${cmp("Deviations",DEV.filter(d=>R.dev[d.id]).map(d=>d.name).join("; ")||"None",DEV.filter(d=>rc.dev[d.id]).map(d=>d.name).join("; "))}
+    ${cmp("Signposted",R.sign?"Yes":"No","Yes")}</tbody></table></div>
+    <p class="muted">The reference path is one strong answer. It is not the only one. If yours differs and scored well, that is a finding.</p></div>
+   <div class="panel stack-s"><h3>What stayed yours</h3><p>The simulation never scored your lectures, readings, assignments, or teaching. It only asked where they live and how a student finds them. Your voice scored <b>${Math.round(sc.voice)}</b>.</p></div>
+   <div class="row"><button class="btn" data-act="again">Play again</button></div>
+   ${paramsHTML()}
+   <footer><p>This is an educational tool. Figures are pedagogical approximations, not forecasts or measurements of any real course. Build hours are simulation-scale, not clock hours. Not an official ASU policy or tool.</p></footer></div>`;
+}
+
+/* ---- parameter labels and sources ---- */
+const PARAMS=[
+ ["9 student hours per week","D","Three credit hours at 45 hours each is 135 hours, over a 15-week term (Rennacker, Advance 2025 exemplar, citing the 135-hour Board of Regents standard). The 15-week term is an assumption."],
+ ["Early drop baseline near 10%","S","Rennacker, Advance 2025 exemplar: early-drop range 7.6% to 13%, average 10.2%, for GIT 450/550."],
+ ["Announcements reach 78% of students","S","Oregon State University Ecampus, Dello Stritto & Simionescu (2026): 78% of 458 students read announcements always or often. Used as the patch reach."],
+ ["Patch effect of 4.7 friction points","D","Reach of 0.78 times an estimated 6-point friction benefit."],
+ ["72% open the first module item; 94% use Start Here","S","Same Oregon State survey (n=458 to 463). Basis for valuing Start Here and module structure."],
+ ["Core elements: Start Here, dates, rubrics, feedback statement, self-contained modules","S","Practices recommended in the same survey and in ASU Teach Online navigation guidance. Their friction values and hours are estimates."],
+ ["Template as a unit option; weekly modules; instructor videos","S","ASU The College course quality standards (instruction.thecollege.asu.edu/coursequalitystandards)."],
+ ["Build hours, template discount of 50%, friction effects, event weights, fit matrix, familiarity of 0.35, failure thresholds","E","The simulation’s central assumptions. The template discount in particular is a hypothesis and should be validated with real build-time data."],
+ ["Five-item times","E","No published time-to-find data was found. Task set is informed by Cidi Labs homepage template testing at CU Boulder (6 participants, no time data)."]
+];
+function paramsHTML(){return `<details class="panel"><summary>Sources and which numbers are sourced, derived, or estimated</summary>
+ <div class="scroll"><table><thead><tr><th>Parameter</th><th>Type</th><th>Basis</th></tr></thead><tbody>${PARAMS.map(p=>`<tr><td>${p[0]}</td><td><span class="tag ${p[1]}">${{S:"Sourced",D:"Derived",E:"Estimate"}[p[1]]}</span></td><td>${p[2]}</td></tr>`).join("")}</tbody></table></div></details>`}
+
+R=fresh(); render();
+</script>
+
+</body></html>
